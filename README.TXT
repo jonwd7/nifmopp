@@ -1,6 +1,10 @@
-            NifMopp 1.0.0.1
+            NifMopp 1.0.0.2
             =================
-
+	
+	Changed multi-material shape calculation. 
+			
+            NifMopp 1.0.0.1
+			
     This file is a helper library for accessing Havok libraries for generating 
     MOPP code from meshes.
     

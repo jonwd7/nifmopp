@@ -70,6 +70,53 @@
 #pragma managed(push, off)
 #endif
 
+
+/* Used for FO MOPP Multi Shape generation 
+ * reimplements hkpSimpleMeshShape to pack the 0-indexed material ID  
+ * into the 8 most significant bits of the shape key
+*/
+*/
+class MtExtendedShape : public hkpSimpleMeshShape {
+public:
+	MtExtendedShape(float f) : hkpSimpleMeshShape(f) {
+		m_type = HK_SHAPE_BV;
+	}
+
+private:
+
+	///// Get the next child shape key
+	///// If the "oldKey" parameter is the last key in the shape collection, this function
+	///// returns HK_INVALID_SHAPE_KEY
+	///// see getChildShape() for extra details
+	virtual hkpShapeKey getNextKey(hkpShapeKey oldKey) const override {
+		int key = oldKey & 0x00FFFFFF;
+		key = hkpSimpleMeshShape::getNextKey(key);
+		if (key == HK_INVALID_SHAPE_KEY)
+			return HK_INVALID_SHAPE_KEY;
+		return  key + (m_materialIndices.getSize()>0 ? (m_materialIndices[key] << 24) : 0);
+	}
+
+	///// Gets a child shape using a shape key.
+	///// This function must return a child shape pointer. This is only called internally by
+	///// the collision detection system after having called getFirstKey() or getNextKey().
+	///// If you have shape keys that are invalid, you must implement getNextKey() in such
+	///// a way that it skips over these shapes.
+	///// Important Note: It is assumed by the system that a shape key, if valid (i.e., returned by
+	///// getNextkey()) will always remain valid.
+	/////
+	///// Notes:
+	/////     - You can return a pointer to a shape
+	/////     - or you can construct a shape in place in the buffer and return a pointer to that buffer.
+	/////       e.g., hkpMeshShape uses this buffer for temporarily created triangles.
+	/////       hkpListShape does not use the buffer as it already has shape instances.
+	/////       \b Attention: When the buffer gets erased, no destructor will be called.
+	/////     - The buffer must be 16 byte aligned.
+	virtual const hkpShape* getChildShape(hkpShapeKey akey, hkpShapeBuffer& buffer) const override {
+		return hkpSimpleMeshShape::getChildShape(akey & 0x00FFFFFF, buffer);
+	}
+
+};
+
 static hkpSimpleMeshShape* ConstructHKMesh( int nVerts, Point3 const* verts, int nTris, Triangle const * tris, int vertOffset = 0)
 {
 	hkpSimpleMeshShape * storageMeshShape = new hkpSimpleMeshShape( 0.01f );
@@ -92,6 +139,31 @@ static hkpSimpleMeshShape* ConstructHKMesh( int nVerts, Point3 const* verts, int
 		vertices.pushBack( hkVector4(vert.x, vert.y, vert.z) );
 	}
 	//storageMeshShape->setRadius(1.0f);
+	return storageMeshShape;
+}
+
+/* Builds the MtExtendedShape given the geometry */
+static MtExtendedShape* FillExtendedShape(int nVerts, Point3 const* verts, int nTris, Triangle const * tris, int vertOffset = 0)
+{
+	MtExtendedShape * storageMeshShape = new MtExtendedShape(0.1f);
+	hkArray<hkVector4> &vertices = storageMeshShape->m_vertices;
+	hkArray<hkpSimpleMeshShape::Triangle> &triangles = storageMeshShape->m_triangles;
+
+	triangles.setSize(0);
+	for (int i = 0; i<nTris; ++i) {
+		Triangle const &tri = tris[i];
+		hkpSimpleMeshShape::Triangle hktri;
+		hktri.m_a = tri[0] - vertOffset;
+		hktri.m_b = tri[1] - vertOffset;
+		hktri.m_c = tri[2] - vertOffset;
+		triangles.pushBack(hktri);
+	}
+
+	vertices.setSize(0);
+	for (int i = 0; i<nVerts; ++i) {
+		Point3 const &vert = verts[i];
+		vertices.pushBack(hkVector4(vert.x, vert.y, vert.z));
+	}
 	return storageMeshShape;
 }
 
@@ -142,50 +214,46 @@ static int InternalGenerateCodeWithSubshapes(int nShapes, int *subShapes, int nV
 		k_phkpMoppCode = NULL;
 	}
 
-	//int voff = 0;
-	//int toff = 0;
+	int voff = 0;
+	int toff = 0;
 
-	//hkpShape** shapes = new hkpShape*[nShapes];
+	//Build the material array
+	hkArray<hkUint8> mat(nTris);
 
-	//for (int i = 0; i<nShapes; ++i) {
-	//	int vend = (voff + subShapes[i] );
-	//	int tend = toff;
-	//	while ( tend < nTris ) {
-	//		Triangle const & t = tris[tend];
-	//		if ( t.a >= vend || t.b >= vend || t.c >= vend )
-	//			break;
-	//		tend++;
-	//	}
-	//	hkpSimpleMeshShape* shape = ConstructHKMesh(vend-voff, &verts[voff], tend-toff, &tris[toff], voff);
-	//	shapes[i] = shape;
- //     voff = vend;
- //     toff = tend;
-	//}
+	for (int i = 0; i<nShapes; ++i) {
+		int vend = (voff + subShapes[i]);
+		int tend = toff;
+		while (tend < nTris) {
+			Triangle const & t = tris[tend];
+			if (t.a >= vend || t.b >= vend || t.c >= vend)
+				break;
+			else {
+				mat[tend] = i;
+			}
+			tend++;
+		}
+
+		voff = vend;
+		toff = tend;
+	}
 
 	//hkpListShape* list = new hkpListShape(&shapes[0], nShapes);
 
-	hkpSimpleMeshShape* list = ConstructHKMesh(nVerts, verts, nTris, tris);
-   list->setRadius(0.1000f);
-
-	hkArray<hkUint8> &materialIndices = list->m_materialIndices;
-
-	materialIndices.setSize(nShapes);
-	for (int i = 0; i<nShapes; ++i)
-		materialIndices[i] = subShapes[i];
+	//Build the mesh
+	MtExtendedShape* mtextendedMesh = FillExtendedShape(nVerts, verts, nTris, tris);
+    //fixed?
+	list->setRadius(0.1000f);
+	//Set the material array
+	mtextendedMesh->m_materialIndices = mat;
 
 	hkpMoppCompilerInput mfr;
-	mfr.setAbsoluteFitToleranceOfAxisAlignedTriangles( hkVector4( 0.1945f, 0.1945f, 0.1945f ) );
-	mfr.setAbsoluteFitToleranceOfTriangles(0.1945f);
-	mfr.setAbsoluteFitToleranceOfInternalNodes(0.3f);
+	mfr.m_enableChunkSubdivision = false;
 
 	k_phkpMoppCode = hkpMoppUtility::buildCode(list, mfr);
 
-	//for (int i = 0; i<nShapes; ++i) {
-	//	shapes[i]->removeReference();
-	//}
-	//delete [] shapes;
-
 	list->removeReference();
+	
+	delete mtextendedMesh;
 
 	return k_phkpMoppCode->m_data.getSize();
 }

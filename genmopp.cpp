@@ -43,14 +43,8 @@
 #include <Common/Base/System/hkBaseSystem.h>
 #include <Common/Base/Memory/hkThreadMemory.h>
 #include <Common/Base/Memory/Memory/Pool/hkPoolMemory.h>
-#include <Common/Base/System/Error/hkDefaultError.h>
-#include <Common/Base/Monitor/hkMonitorStream.h>
-
-#include <Common/Base/System/Io/FileSystem/hkFileSystem.h>
-#include <Common/Base/Container/LocalArray/hkLocalBuffer.h>
 //
 #include <Physics/Collide/Shape/Convex/Box/hkpBoxShape.h>
-#include <Physics/Collide/Shape/Convex/ConvexTranslate/hkpConvexTranslateShape.h>
 #include <Physics/Collide/Shape/Convex/ConvexTransform/hkpConvexTransformShape.h>
 #include <Physics/Collide/Shape/Compound/Collection/SimpleMesh/hkpSimpleMeshShape.h>
 #include <Physics/Collide/Shape/Compound/Collection/List/hkpListShape.h>
@@ -61,7 +55,7 @@
 
 #pragma comment(lib, "hkBase.lib")
 #pragma comment(lib, "hkSerialize.lib")
-#pragma comment(lib, "hkpInternal.lib")
+#pragma comment(lib, "hkInternal.lib")
 #pragma comment(lib, "hkpUtilities.lib")
 #pragma comment(lib, "hkpCollide.lib")
 #pragma comment(lib, "hkpConstraintSolver.lib")
@@ -75,7 +69,7 @@
  * reimplements hkpSimpleMeshShape to pack the 0-indexed material ID  
  * into the 8 most significant bits of the shape key
 */
-*/
+
 class MtExtendedShape : public hkpSimpleMeshShape {
 public:
 	MtExtendedShape(float f) : hkpSimpleMeshShape(f) {
@@ -111,7 +105,7 @@ private:
 	/////       hkpListShape does not use the buffer as it already has shape instances.
 	/////       \b Attention: When the buffer gets erased, no destructor will be called.
 	/////     - The buffer must be 16 byte aligned.
-	virtual const hkpShape* getChildShape(hkpShapeKey akey, hkpShapeBuffer& buffer) const override {
+	virtual const hkpShape* getChildShape(hkpShapeKey akey, ShapeBuffer& buffer) const override {
 		return hkpSimpleMeshShape::getChildShape(akey & 0x00FFFFFF, buffer);
 	}
 
@@ -237,22 +231,15 @@ static int InternalGenerateCodeWithSubshapes(int nShapes, int *subShapes, int nV
 		toff = tend;
 	}
 
-	//hkpListShape* list = new hkpListShape(&shapes[0], nShapes);
-
 	//Build the mesh
 	MtExtendedShape* mtextendedMesh = FillExtendedShape(nVerts, verts, nTris, tris);
-    //fixed?
-	list->setRadius(0.1000f);
-	//Set the material array
 	mtextendedMesh->m_materialIndices = mat;
 
 	hkpMoppCompilerInput mfr;
 	mfr.m_enableChunkSubdivision = false;
 
-	k_phkpMoppCode = hkpMoppUtility::buildCode(list, mfr);
+	k_phkpMoppCode = hkpMoppUtility::buildCode( mtextendedMesh, mfr);
 
-	list->removeReference();
-	
 	delete mtextendedMesh;
 
 	return k_phkpMoppCode->m_data.getSize();

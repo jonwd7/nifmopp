@@ -37,6 +37,19 @@
 
 #include "NifMopp.h"
 
+
+#if _MSC_VER >= 1900
+#pragma comment(lib, "legacy_stdio_definitions.lib")
+
+FILE _iob[] = { *stdin, *stdout, *stderr };
+
+extern "C" FILE * __iob_func( void )
+{
+	return _iob;
+}
+#endif
+
+
 //
 // Math and base include
 #include <Common/Base/hkBase.h>
@@ -48,7 +61,7 @@
 
 #pragma comment(lib, "hkBase.lib")
 #pragma comment(lib, "hkSerialize.lib")
-#pragma comment(lib, "hkpInternal.lib")
+#pragma comment(lib, "hkInternal.lib")
 #pragma comment(lib, "hkpUtilities.lib")
 
 #ifdef _MANAGED
@@ -72,7 +85,7 @@ extern void InitializeHavok()
 	{
 		// Initialize the base system including our memory system
 		hkPoolMemory* memoryManager = new hkPoolMemory();
-		threadMemory = new hkThreadMemory(memoryManager, 16);
+		threadMemory = new hkThreadMemory(memoryManager);
 		hkBaseSystem::init( memoryManager, threadMemory, errorReport );
 		memoryManager->removeReference();
 

@@ -41,7 +41,10 @@
 // Math and base include
 
 
-#include <Common/hkAnimationPhysicsPublicInclude.h>
+#include <Physics/Utilities/Dynamics/Inertia/hkpInertiaTensorComputer.h>
+#include <Common/Base/Types/Geometry/hkGeometry.h>
+#include <Common/Base/Types/Geometry/hkStridedVertices.h>
+#include <Common/Internal/ConvexHull/hkGeometryUtility.h>
 
 #pragma comment(lib, "hkBase.lib")
 #pragma comment(lib, "hkSerialize.lib")
@@ -206,7 +209,7 @@ void __stdcall CalcMassPropertiesPolyhedron(
 	vertsIn.m_striding = sizeof(Point3);
 	hkGeometry* geom = new hkGeometry();
 	hkInplaceArrayAligned16<hkVector4,32> transformedPlanes;
-	hkpGeometryUtility::createConvexGeometry(vertsIn, *geom, transformedPlanes);
+	hkGeometryUtility::createConvexGeometry(vertsIn, *geom, transformedPlanes);
 
 
 	bool scaleDensity = (mass == 0.0f);

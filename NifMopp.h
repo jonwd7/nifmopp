@@ -1,6 +1,14 @@
 #pragma once
 
+#include <windows.h>
 #include <exception>
+#include <excpt.h>
+#include <cstring>
+#include <stdio.h>
+
+#if _MSC_VER >= 1900
+extern "C" FILE * __iob_func( void );
+#endif
 
 struct Point3
 {
